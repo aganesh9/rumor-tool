@@ -3,22 +3,32 @@
 import urllib
 import nltk, re, pprint
 from BeautifulSoup import BeautifulSoup 
+import ConfigParser
+import sqlite3
+import hashlib
+
+config = ConfigParser.RawConfigParser()
+config.read('dataset.cfg')
+
+m = hashlib.md5()
 
 # Function to extract keywords from text in paragraph tag
 def get_keywords(myd):
+	keywords = ""
 	sentences = nltk.sent_tokenize(myd)  
 	sentences = [nltk.wordpunct_tokenize(sent) for sent in sentences]
 	sentences = [nltk.pos_tag(sent) for sent in sentences]
 	#for sent in sentences:
 	#	for word in sent:
 	#		print word[1]+ ":" + word[0]
-	print "\nKeywords:"
 	for sent in sentences:
 		for word in sent:
 			#Only words that are significant parts of speech are chosen as keywords
 			if word[1] in ('JJ','NNP', 'NNS', 'NNPS', 'VB', 'VBD', 'VBG', 'WRB'):
-				print word[0]
-url = "http://urbanlegends.about.com/od/reference/a/new_uls.htm"		
+				#print word[0]
+				keywords = keywords + word[0] + "\n"
+	return keywords
+url = config.get('Section1', 'url')		
 sock = urllib.urlopen(url)
 wsource = sock.read()
 sock.close()
@@ -38,26 +48,41 @@ print "Found " + str(count) + " news items\n"
 i = 1
 L = L[1:-1]
 flag = 0
+conn = sqlite3.connect('RumorTool.db')
+c = conn.cursor()
 for node in L:
 	print str(i)+":\n"
-	print node.find('a').text + "\n" + node.text
-	print "\n"
-	title =node.find('a')
-	url = "http://www.urbanlegends.about.com" + str(title.get('href'))
-	sock = urllib.urlopen(url)
-	wsource = sock.read()
-	sock.close()
-	soup = BeautifulSoup(wsource)
-	stat = soup.find("div", {"id": "articlebody"}).find('p').findAll('b')
-	if (stat):
-		status = stat[-1].text
-		flag = 1
-		print status
-	if flag == 0:
-		print "Status: Unknown"
-	flag = 0
+	m.update(node.text);
+	News_id = m.hexdigest()
+	c.execute("SELECT * FROM NEWS_ITEMS WHERE News_id = '%s'" % News_id)
+	exist = c.fetchone()
+	if exist is None:
+		date_text = node.find('i').text
+		Added_date = date_text[7:-1]
+		title =node.find('a')
+		print title.text + "\n"
+		url = config.get('Section1', 'domain') + str(title.get('href'))
+		sock = urllib.urlopen(url)
+		wsource = sock.read()
+		sock.close()
+		soup = BeautifulSoup(wsource)
+		stat = soup.find("div", {"id": "articlebody"}).find('p').findAll('b')
+		if (stat):
+			status = stat[-1].text
+			flag = 1
+			print status
+		if flag == 0:
+			status = "Status: Unknown"
+			print status
+		flag = 0
+		real_text = node.find('i').previous;
+		print real_text + "\n"
+	 	news_items = [(News_id, real_text, get_keywords(real_text), Added_date ,status)]
+		c.executemany('INSERT INTO NEWS_ITEMS VALUES (?,?,?,?,?)', news_items)
+	else:
+		print exist[1]+ "\n" + "\nKeywords: " + exist[2] + "\n\n" + exist[3]
 	i+=1
-
+conn.commit()
 print "\nChoose a news item number to extract keywords: "
 number = int(raw_input())
 
@@ -65,15 +90,15 @@ count=0
 for mylist in L:
 	count+=1
 	if count == number:
-		title = mylist.find('a')
-		print title.text
-		#Getting keywords from title
-		get_keywords(title.text)
-
-		print mylist.text
+		real_text = mylist.find('i').previous;
 		#Getting keywords from brief description
-		get_keywords(mylist.text)
+		print "Keywords: \n"
+		keywords = get_keywords(real_text)
+		print keywords
 		break
+conn.close()
+
+
 
 
 
