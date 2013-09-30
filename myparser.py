@@ -6,6 +6,7 @@ from BeautifulSoup import BeautifulSoup
 import ConfigParser
 import sqlite3
 import hashlib
+import subprocess
 
 config = ConfigParser.RawConfigParser()
 config.read('dataset.cfg')
@@ -24,9 +25,10 @@ def get_keywords(myd):
 	for sent in sentences:
 		for word in sent:
 			#Only words that are significant parts of speech are chosen as keywords
-			if word[1] in ('JJ','NNP', 'NNS', 'NNPS', 'VB', 'VBD', 'VBG', 'WRB'):
-				#print word[0]
-				keywords = keywords + word[0] + "\n"
+			if word[1] in ('JJ','NNP', 'NNS', 'NNPS', 'VB', 'VBD', 'VBG', 'WRB', 'NN'):
+				print word[0] + ":" + word[1];
+				keywords = keywords + word[0] + ":" + word[1] + "\n";
+	
 	return keywords
 url = config.get('Section1', 'url')		
 sock = urllib.urlopen(url)
@@ -52,7 +54,8 @@ conn = sqlite3.connect('RumorTool.db')
 c = conn.cursor()
 for node in L:
 	print str(i)+":\n"
-	m.update(node.text);
+	m = hashlib.md5()
+	m.update(node.text.encode('utf-8'))
 	News_id = m.hexdigest()
 	c.execute("SELECT * FROM NEWS_ITEMS WHERE News_id = '%s'" % News_id)
 	exist = c.fetchone()
@@ -60,7 +63,7 @@ for node in L:
 		date_text = node.find('i').text
 		Added_date = date_text[7:-1]
 		title =node.find('a')
-		print title.text + "\n"
+		#print title.text + "\n"
 		url = config.get('Section1', 'domain') + str(title.get('href'))
 		sock = urllib.urlopen(url)
 		wsource = sock.read()
@@ -75,28 +78,38 @@ for node in L:
 			status = "Status: Unknown"
 			print status
 		flag = 0
-		real_text = node.find('i').previous;
+		real_text = node.find('i').previous
 		print real_text + "\n"
+		for char in '(?.!/;:\)':
+			real_text = real_text.replace(char,' ')
 	 	news_items = [(News_id, real_text, get_keywords(real_text), Added_date ,status)]
 		c.executemany('INSERT INTO NEWS_ITEMS VALUES (?,?,?,?,?)', news_items)
 	else:
-		print exist[1]+ "\n" + "\nKeywords: " + exist[2] + "\n\n" + exist[3]
+		print "exists"
+		print exist[1]+ "\n" + "\nKeywords: " + exist[2] + "\nAdded: " + exist[3] + "\n\n" + exist[4]
 	i+=1
 conn.commit()
 print "\nChoose a news item number to extract keywords: "
 number = int(raw_input())
-
+final_id_passed = ""
+keywords1=""
 count=0
 for mylist in L:
 	count+=1
 	if count == number:
-		real_text = mylist.find('i').previous;
+		m1 = hashlib.md5()
+		m1.update(mylist.text.encode('utf-8'))
+		final_id_passed = m1.hexdigest()
+		real_text = mylist.find('i').previous
+		for char in '(?.!/;:\)"':
+			real_text = real_text.replace(char,' ')
 		#Getting keywords from brief description
 		print "Keywords: \n"
-		keywords = get_keywords(real_text)
-		print keywords
+		keywords1 = get_keywords(real_text)
+		print keywords1
 		break
 conn.close()
+#subprocess.call(['java', '-jar', 'CollectTweets.jar', keywords1+final_id_passed])
 
 
 
