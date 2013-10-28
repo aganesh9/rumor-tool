@@ -1,6 +1,5 @@
 
 public class Collect {
-
 	public static void main(String[] args)
 	{
 		CollectStreamAPI ct = new CollectStreamAPI();

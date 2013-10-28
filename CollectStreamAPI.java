@@ -3,10 +3,16 @@ import twitter4j.conf.ConfigurationBuilder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;  
@@ -21,6 +27,10 @@ public class CollectStreamAPI {
     static ResultSet resultSet = null;  
     static PreparedStatement statement = null; 
     static int count = 0;
+    ArrayList<String> list;
+    ArrayList<String> noun_list;
+    FileWriter fw;
+    BufferedWriter bw;
 	static Connection getConnection() {
 		try {
 			if (c==null)
@@ -87,39 +97,78 @@ public class CollectStreamAPI {
             	
 				try {
 					// gets Twitter handle
-					if (count==5)
+					if (count==1000)
 						System.exit(1);
 					
 					User user = status.getUser();
-	                String username = status.getUser().getScreenName();
-	                System.out.println(username);
-	                String name = status.getUser().getName();
-	                System.out.println(name);
-	                String profileLocation = user.getLocation();
-	                System.out.println(profileLocation);
-	                long tweetId = status.getId(); 
-	                System.out.println(tweetId);
+	               
 	                String content = status.getText();
+	                content = content.toLowerCase();
 	                
-	                
-	                System.out.println(content +"\n");
 	                Connection c = getConnection();
-	                String getid = "select * from USERS where Twitter_handle='"+username+"'";
-	                Statement st = c.createStatement();
-					ResultSet rs = st.executeQuery(getid);
-					if (!rs.next())
-					{
-		                String sql = "insert into USERS values(?,?,?,?,?,?)";
-		                statement = c.prepareStatement(sql);
-		                statement.setString(1, username);
-		                statement.setString(2, name);
-		                statement.setString(3, profileLocation);
-		                statement.setInt(4, user.getFollowersCount());
-		                statement.setInt(5, user.getFriendsCount());
-		                statement.setInt(6, user.getStatusesCount());
-		                statement.executeUpdate();
-		                count++;
-					}
+	                
+	                Combinations com = new Combinations(noun_list);
+	                Double myd =  0.45* noun_list.size();
+	                
+	        	    List<List<LinkedList>> resultList =  com.getCombinations();
+	        		int i = 0 ; 
+	        		//System.out.println("Entering...");
+	        		String s1;
+	        		while(i < resultList.size()){
+	        			s1 = new String("");
+	        			List<LinkedList>  s = resultList.get(i);
+	        			if(s.size() == (myd.intValue())){
+	        				int j = 0 ;
+	        				
+	        				s1 = s1 + ".*";
+	        				//s1 = "";
+	        				while(j < s.size()) {
+	        					//s1.append(s.get(j));
+	        					//s1.append(".*");
+	        					s1 = s1 + s.get(j) + ".*";
+	        					j++;
+	        				}
+	        				
+	        				Pattern p = Pattern.compile(s1);
+	        				Matcher m = p.matcher(content);
+	        				//System.out.println("Pattern: "+s1+ "\n");
+	        				
+	        				if (m.find())
+	        				{
+	        					 String username = status.getUser().getScreenName();
+	        		             System.out.println(username);
+	        		             String name = status.getUser().getName();
+	        		             System.out.println(name);
+	        		             String profileLocation = user.getLocation();
+	        		             System.out.println(profileLocation);
+	        		             long tweetId = status.getId(); 
+	        		             System.out.println(tweetId);
+	        		                
+	        					String getid = "select * from USERS where Twitter_handle='"+username+"'";
+	        	                Statement st = c.createStatement();
+	        					ResultSet rs = st.executeQuery(getid);
+	        					if (!rs.next())
+	        					{
+	        						System.out.println(content +"\n");
+	        		                String sql = "insert into USERS values(?,?,?,?,?,?)";
+	        		                statement = c.prepareStatement(sql);
+	        		                statement.setString(1, username);
+	        		                statement.setString(2, name);
+	        		                statement.setString(3, profileLocation);
+	        		                statement.setInt(4, user.getFollowersCount());
+	        		                statement.setInt(5, user.getFriendsCount());
+	        		                statement.setInt(6, user.getStatusesCount());
+	        		                statement.executeUpdate();
+	        		                
+	        					}
+	        					break;
+	        				}
+	        				//System.out.println("***" + s1 + "#####"); 
+	        			}
+	        			i++;
+	        		}
+	        		
+	        		count++;
 					
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
@@ -144,17 +193,30 @@ public class CollectStreamAPI {
 		String this_got = param_word;
 	    String[] params = this_got.split("\n");
 	    String News_id = params[params.length-1];
-	    ArrayList<String> list = new ArrayList<String>();
+	    System.out.println("News Id: "+ News_id + "\n");
+	    list = new ArrayList<String>();
+	    noun_list = new ArrayList<String>();
+	    String[] nouns = {"NNP", "NNS", "NN", "NNPS"};
+	    boolean found=false;
 	    for (String pms : params) {
 	    String[] pm = pms.split(":");
-	    list.add(pm[0]);
+	    if (pm.length ==1)
+	    	break;
+	    if (!pm[0].toLowerCase().equals("viral"))
+	    	list.add(pm[0].toLowerCase());
+	    found = false;
+	    for (String nn : nouns) {
+	    	found = pm[1].equals(nn);
+	    	if (found)
+	    		break;
 	    }
-	    //ArrayList<String> list = new ArrayList<String>(Arrays.asList(params));
-	    list.remove(params.length-1);
-	    String[] keywords = list.toArray(new String[list.size()]);
-	    System.out.println("java:\n");
+	    if ((found)&&(!pm[0].toLowerCase().equals("viral")))
+	    	noun_list.add(pm[0].toLowerCase());
+	    }
+	    
+	    String[] keywords = noun_list.toArray(new String[noun_list.size()]);
         fq.track(keywords);
-
+        
         twitterStream.addListener(listener);
         twitterStream.filter(fq);  
        
