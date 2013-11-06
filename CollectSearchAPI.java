@@ -21,26 +21,26 @@ import java.sql.Statement;
 
 public class CollectSearchAPI {
 	static Properties prop;
-	static Connection c = null;
-	static ResultSet resultSet = null;
+	static Connection connObj = null;
+	static ResultSet rs = null;
+	static Statement st = null;
 	static PreparedStatement statement = null;
 	static int count = 0;
 	ArrayList<String> list;
 	ArrayList<String> noun_list;
     static String index;
-	static Connection getConnection() {
+	void getConnection() {
 		try {
-			if (c == null) {
+			if (connObj == null) {
 				prop = loadDBProperties();
 				Class.forName("org.sqlite.JDBC");
 				String dbPath = prop.getProperty("dbpath");
-				c = DriverManager.getConnection("jdbc:sqlite:" + dbPath
-						+ "/RumorTool.db");
+				connObj = DriverManager.getConnection("jdbc:sqlite:" + dbPath
+						+ "/RumorTool2.db");
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		return c;
 	}
 
 	public static Properties loadDBProperties() throws FileNotFoundException,
@@ -68,7 +68,6 @@ public class CollectSearchAPI {
 			ConfigurationBuilder cb = new ConfigurationBuilder();
 			
 			Properties accessProp = loadAccessProperties();
-			//String id = "2" ; 
 			
 			String this_got = param_word;
 			System.out.println(this_got);
@@ -79,17 +78,11 @@ public class CollectSearchAPI {
 			String credentials_temp = accessProp.getProperty(index);
 			String credentials = credentials_temp.substring(1, credentials_temp.length()-1);
 			
-			
-			
 			String[] creds = credentials.split(",");
 			String OAuthConsumerKey = creds[0];
 			String OAuthConsumerSecret= creds[1];
 			String AccessToken = creds[2];
 			String AccessTokenSecret = creds[3];
-			/*System.out.println(OAuthConsumerKey);
-			System.out.println(OAuthConsumerSecret);
-			System.out.println(AccessToken);
-			System.out.println(AccessTokenSecret);*/
 			
 			cb.setOAuthConsumerKey(OAuthConsumerKey);
 			cb.setOAuthConsumerSecret(OAuthConsumerSecret);
@@ -132,18 +125,13 @@ public class CollectSearchAPI {
 			twitterFactory = new TwitterFactory(cb.build());
 			Twitter twitter = twitterFactory.getInstance();
 
-			/*Query query = new Query(bigword.toString());
-			query.setCount(100); // set tweets per page to 5
-
-			QueryResult result = twitter.search(query);
-			List<Status> qrTweets = result.getTweets();*/
-
 			Combinations com = new Combinations(noun_list);
 			Double myd =  noun_list.size()*0.5;
 			System.out.println("Noun list size: "+noun_list.size());
 			System.out.println("List size: "+myd.intValue());
 			List<String> list = com.getUniqueCombinations(noun_list.toArray(new String[noun_list.size()]), myd.intValue());
 			int ind = 0 ; 
+			
 			while(ind < list.size()){
 				Query query = new Query(list.get(ind));
 				ind++;
@@ -169,18 +157,19 @@ public class CollectSearchAPI {
 					
 					long tweetId = status.getId();
 					
-					Connection c = getConnection();
+					
 					String getid = "select * from USERS where Twitter_handle='"
 							+ username + "'";
-					Statement st = c.createStatement();
-					ResultSet rs = st.executeQuery(getid);
+					getConnection();
+					st = connObj.createStatement();
+					rs = st.executeQuery(getid);
 					if (!rs.next()) {
 						System.out.println(username);
 						//System.out.println(name);
 						//System.out.println(profileLocation);
 					
 						String sql = "insert into USERS values(?,?,?,?,?,?)";
-						statement = c.prepareStatement(sql);
+						statement = connObj.prepareStatement(sql);
 						statement.setString(1, username);
 						statement.setString(2, name);
 						statement.setString(3, profileLocation);
@@ -188,11 +177,12 @@ public class CollectSearchAPI {
 						statement.setInt(5, user.getFriendsCount());
 						statement.setInt(6, user.getStatusesCount());
 						statement.executeUpdate();
+						
 					}
-					rs.close();
-					st.close();
+					
 					getid = "select * from tweets where Tweet_ID='"+Long.toString(tweetId)+"'";
-					st = c.createStatement();
+					getConnection();
+					st = connObj.createStatement();
 					rs = st.executeQuery(getid);
 					if (!rs.next()) {
 						System.out.println(tweetId);
@@ -232,7 +222,7 @@ public class CollectSearchAPI {
 					    	 System.out.println("@" + status.getUser().getScreenName() + " - " + status.getText());
 					    }*/
 						String sql = "insert into tweets values(?,?,?,?,?,?,?,?,?,?,?)";
-						statement = c.prepareStatement(sql);
+						statement = connObj.prepareStatement(sql);
 						statement.setString(1, Long.toString(tweetId));
 						statement.setString(2, News_id);
 						statement.setString(3, content);
@@ -246,13 +236,23 @@ public class CollectSearchAPI {
 						statement.setString(11, "bla");
 						statement.executeUpdate();
 						
-						rs.close();
-						st.close();
 						}
+					
 				}
+				
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
+		}
+		finally{
+		    try{
+		    	if (rs!=null)
+		    		rs.close();
+		    	if (st!=null)
+		    		st.close();
+		    	if (connObj!=null)
+				connObj.close();
+			}catch(Exception e){e.printStackTrace();}
 		}
 	}
 }
