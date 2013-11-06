@@ -7,6 +7,7 @@ import ConfigParser
 import sqlite3
 import hashlib
 import subprocess
+import shlex
 from sys import exit
 
 config = ConfigParser.RawConfigParser()
@@ -56,8 +57,6 @@ conn = sqlite3.connect('RumorTool.db')
 c = conn.cursor()
 index = 0
 for node in L:
-	#if (i==38):
-	#	exit()
 	print str(i)+":\n"
 	m = hashlib.md5()
 	m.update(node.text.encode('utf-8'))
@@ -65,10 +64,11 @@ for node in L:
 	c.execute("SELECT * FROM NEWS_ITEMS WHERE News_id = '%s'" % News_id)
 	exist = c.fetchone()
 	if exist is None:
-		date = node.find('i')
+		date = node.find('em')
 		if date is not None:
 			date_text = date.text
-			Added_date = date_text[7:-1]
+			dates = shlex.split(date_text)
+			Added_date = dates[1].replace(')','')
 		else:
 			Added_date = "Unknown"
 		
@@ -103,7 +103,7 @@ for node in L:
 		if (st in exist[4].lower()):
 			subprocess.call(['java', '-jar', 'CollectTweets.jar', exist[2]+News_id+"\n"+str(index)])
 			index = index+1
-	#i+=1
+	i = i+1
 	sock.close()
 conn.commit()
 conn.close()
